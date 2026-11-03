@@ -179,7 +179,9 @@ function fitAdd(){const on=FS.filter(([k])=>F.on[k]),bun=on.length>1;let fail=nu
   const pr=bun?Math.round(cur(p)*.9):cur(p);if(ex)ex.qty++;else bag.push({key,id:p.id,name:p.name,sku:v.skus&&v.skus[z]||v.sku,color:v.color,size:z,qty:1,price:pr,img:CUT[p.id]})});
  save();toast(fail?"Stok "+fail+" tidak cukup":"Look ditambahkan ke tas");S.open=true;S.buy=false;drawer()}
 function go(h){location.hash=h;if(!h)route()}
-function imgFail(e){e.onerror=null;S.fail=(S.fail||0)+1;e.src=img("gen:tee:#eee:front");e.style.opacity=.6;const w=$("#st");if(w&&S.fail>2)w.textContent="Foto Lazada gagal dimuat ("+S.fail+" gambar) — kemungkinan diblokir Lazada atau link tidak valid"}
+function imgFail(e){const m=(e.getAttribute("src")||"").match(/foto_bersih\/(\d+)\.png/);
+ if(m&&!e.dataset.r){e.dataset.r=1;const p=DATA.find(x=>x.id==m[1]);if(p&&p.variants[0].images[0]){e.src=p.variants[0].images[0];return}}
+ e.onerror=null;S.fail=(S.fail||0)+1;e.src=img("gen:tee:#eee:front");e.style.opacity=.6;const w=$("#st");if(w&&S.fail>2)w.textContent="Foto gagal dimuat ("+S.fail+" gambar) — file foto belum terunggah ke GitHub, atau diblokir Lazada"}
 function tilt(){const sc=$(".scroll");if(!sc)return;const cx=sc.getBoundingClientRect().left+sc.clientWidth/2,gs=[...sc.querySelectorAll(".g")];let best=null,bd=1e9;
  gs.forEach(g=>{const r=g.getBoundingClientRect();if(r.right<-250||r.left>innerWidth+250)return;const d=(r.left+r.width/2-cx)/(r.width||1),a=Math.abs(d);
   g.style.setProperty("--ry",(-Math.sign(d)*Math.min(a*34,52)).toFixed(1)+"deg");g.style.setProperty("--sc",(1.1-Math.min(a,1)*.2).toFixed(3));g.style.setProperty("--br",(1-Math.min(a,1)*.45).toFixed(2));if(a<bd){bd=a;best=g}});

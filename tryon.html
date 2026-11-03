@@ -4,7 +4,7 @@
 <style>
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:#111;color:#111;font:14px/1.4 "Helvetica Neue",Arial,sans-serif;overflow:hidden}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
-#stage{position:fixed;inset:0;background:#000}#v,#c{position:absolute;inset:0;width:100%;height:100%}#v{object-fit:cover}
+#stage{position:fixed;inset:0;background:#000}#v,#c{position:absolute;inset:0;width:100%;height:100%}#v{object-fit:contain}
 #top{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 0;z-index:3}
 .pill{background:#fffe;border-radius:18px;padding:7px 13px;font-size:12px;text-decoration:none;color:#111;backdrop-filter:blur(6px)}
 #hint{position:absolute;left:50%;top:22%;transform:translateX(-50%);background:#000a;color:#fff;padding:8px 14px;border-radius:16px;font-size:13px;text-align:center;max-width:86%;z-index:3;display:none}
@@ -16,12 +16,13 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 #tabs input{margin-left:auto;border:0;border-bottom:1px solid #ccc;background:none;font:inherit;font-size:12px;width:90px;outline:0}
 #wd{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}.wi{flex:0 0 66px;border:1px solid #ddd;background:#fff;padding:3px;border-radius:6px}.wi.on{border-color:#111;border-width:2px}.wi img{width:100%;height:60px;object-fit:contain;display:block}
 #acts{display:flex;gap:8px;margin-top:6px}#acts button{flex:1;min-height:42px;border:1px solid #111;font-size:12px;border-radius:21px}#acts .pri{background:#111;color:#fff}
+#sheet.fold #tabs,#sheet.fold #wd{display:none}
 #toast{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);background:#111;color:#fff;padding:8px 16px;border-radius:16px;z-index:8;display:none;font-size:13px}
 </style></head><body>
 <div id="stage"><video id="v" playsinline muted autoplay></video><canvas id="c"></canvas>
 <div id="top"><a class="pill" href="index.html#fit">← Kembali</a><span class="pill" id="price">Pilih item</span><span><button class="pill" id="shoeflip" title="Balik arah sepatu">⇄ Sepatu</button> <button class="pill" id="flip">⟲ Kamera</button></span></div>
 <div id="hint"></div><div id="toast"></div>
-<div id="sheet"><div id="tabs"></div><div id="wd"></div><div id="acts"><button id="snap">📷 Foto</button><button id="clear">Lepas semua</button><button class="pri" id="bag">Add look to bag</button></div></div>
+<div id="sheet"><button class="pill" id="fold" style="position:absolute;right:12px;top:-36px">▾ Menu</button><div id="tabs"></div><div id="wd"></div><div id="acts"><button id="snap">📷 Foto</button><button id="clear">Lepas semua</button><button class="pri" id="bag">Add look to bag</button></div></div>
 <div id="start"><h1>TRY YOUR FIT</h1><p>Berdiri 1,5–2 meter dari kamera sampai seluruh badan terlihat, di tempat yang terang. Video tidak diunggah ke mana pun, semuanya diproses di HP Anda.</p><button id="go">Mulai kamera</button><div id="msg"></div></div></div>
 <script src="products.js?v=4" onerror="window.__e1=1"></script>
 <script src="cutouts.js?v=1" onerror="window.__e2=1"></script>
@@ -58,7 +59,7 @@ function placements(Q,sel,img,flipShoe,find){const out=[],ok=(i,t=.5)=>Q[i]&&Q[i
 const v=$("#v"),cv=$("#c"),ctx=cv.getContext("2d");let W=0,H=0,dpr=1;
 function resize(){dpr=Math.min(devicePixelRatio||1,2);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr}
 addEventListener("resize",resize);
-function mapPt(l){const vw=v.videoWidth,vh=v.videoHeight,s=Math.max(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2;let x=l.x*vw*s+ox;const y=l.y*vh*s+oy;if(facing=="user")x=W-x;return{x,y,vis:l.visibility??1}}
+function mapPt(l){const vw=v.videoWidth,vh=v.videoHeight,s=Math.min(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2;let x=l.x*vw*s+ox;const y=l.y*vh*s+oy;if(facing=="user")x=W-x;return{x,y,vis:l.visibility??1}}
 function frame(){if(!running)return;
  if(v.readyState>=2&&lmk&&v.currentTime!==last){last=v.currentTime;try{const r=lmk.detectForVideo(v,performance.now()),p=r.landmarks&&r.landmarks[0];
   if(p){sm=sm&&sm.length==p.length?p.map((l,i)=>({x:sm[i].x+(l.x-sm[i].x)*.45,y:sm[i].y+(l.y-sm[i].y)*.45,visibility:l.visibility})):p.map(l=>({...l}));P=sm.map(mapPt)}else{sm=null;P=null}}catch(e){}}
@@ -70,7 +71,7 @@ function frame(){if(!running)return;
  requestAnimationFrame(frame)}
 function hint(t){const h=$("#hint");h.textContent=t;h.style.display=t?"block":"none"}
 async function camera(){if(stream)stream.getTracks().forEach(t=>t.stop());
- stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:720},height:{ideal:1280}},audio:false});
+ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1080},height:{ideal:1440}},audio:false});
  v.srcObject=stream;await v.play();v.style.transform=facing=="user"?"scaleX(-1)":"none";resize()}
 async function model(){const{PoseLandmarker,FilesetResolver}=await import(MP+"/+esm"),fs=await FilesetResolver.forVisionTasks(MP+"/wasm");
  const mk=d=>PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:"VIDEO",numPoses:1});
@@ -81,10 +82,11 @@ $("#go").onclick=async()=>{const m=$("#msg");m.textContent="";$("#go").disabled=
   $("#start").style.display="none";running=true;frame()}
  catch(e){m.textContent=(e.name=="NotAllowedError"?"Izin kamera ditolak. Aktifkan izin kamera untuk situs ini di pengaturan browser, lalu coba lagi.":e.message);$("#go").disabled=false;$("#go").textContent="Coba lagi"}};
 $("#flip").onclick=async()=>{facing=facing=="user"?"environment":"user";sm=null;try{await camera()}catch(e){toast("Kamera tidak bisa diganti")}};
+$("#fold").onclick=()=>{const s=$("#sheet");s.classList.toggle("fold");$("#fold").textContent=s.classList.contains("fold")?"▴ Menu":"▾ Menu"};
 $("#shoeflip").onclick=()=>{shoeFlip=!shoeFlip};
 $("#clear").onclick=()=>{Object.keys(sel).forEach(k=>sel[k]=null);strip();price()};
 $("#snap").onclick=()=>{const o=document.createElement("canvas");o.width=W*2;o.height=H*2;const x=o.getContext("2d");x.scale(2,2);
- const vw=v.videoWidth,vh=v.videoHeight,s=Math.max(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2;x.save();if(facing=="user"){x.translate(W,0);x.scale(-1,1)}x.drawImage(v,ox,oy,vw*s,vh*s);x.restore();x.drawImage(cv,0,0,W,H);
+ const vw=v.videoWidth,vh=v.videoHeight,s=Math.min(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2;x.save();if(facing=="user"){x.translate(W,0);x.scale(-1,1)}x.drawImage(v,ox,oy,vw*s,vh*s);x.restore();x.drawImage(cv,0,0,W,H);
  o.toBlob(async b=>{const f=new File([b],"try-your-fit.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return}catch(e){}}const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=f.name;a.click();toast("Foto disimpan")})};
 $("#bag").onclick=()=>{const it=Object.values(sel).filter(Boolean).map(byId);if(!it.length)return toast("Pilih item dulu");let bag=[];try{bag=JSON.parse(localStorage.getItem("apex-bag")||"[]")}catch(e){}
  const bun=it.length>1;it.forEach(p=>{const vr=p.variants[0],z=Object.keys(vr.stock).find(k=>vr.stock[k]!==0)||Object.keys(vr.stock)[0],key=vr.sku+"|"+z,ex=bag.find(b=>b.key==key),pr=bun?Math.round(cur(p)*.9):cur(p);
