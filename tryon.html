@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>APEX — Try On Kamera (Prototipe)</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:#111;color:#111;font:14px/1.4 "Helvetica Neue",Arial,sans-serif;overflow:hidden}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+#stage{position:fixed;inset:0;background:#000}#v,#c{position:absolute;inset:0;width:100%;height:100%}#v{object-fit:contain}
+#top{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 0;z-index:3}
+.pill{background:#fffe;border-radius:18px;padding:7px 13px;font-size:12px;text-decoration:none;color:#111;backdrop-filter:blur(6px)}
+#hint{position:absolute;left:50%;top:22%;transform:translateX(-50%);background:#000a;color:#fff;padding:8px 14px;border-radius:16px;font-size:13px;text-align:center;max-width:86%;z-index:3;display:none}
+#start{position:absolute;inset:0;background:#fff;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
+#start h1{letter-spacing:.2em;font-size:20px;margin:0 0 10px}#start p{color:#666;max-width:300px}#go{background:#111;color:#fff;padding:14px 30px;margin-top:18px;letter-spacing:.08em;text-transform:uppercase;font-size:12px}
+#msg{color:#b00;margin-top:12px;font-size:13px;max-width:300px}
+#sheet{position:absolute;left:0;right:0;bottom:0;background:#fffe;backdrop-filter:blur(10px);z-index:4;padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px));border-radius:18px 18px 0 0}
+#tabs{display:flex;gap:16px;align-items:center;padding:2px 4px 8px}#tabs button{font-size:13px;color:#888;padding-bottom:2px;border-bottom:2px solid transparent}#tabs button.on{color:#111;border-color:#111}
+#tabs input{margin-left:auto;border:0;border-bottom:1px solid #ccc;background:none;font:inherit;font-size:12px;width:90px;outline:0}
+#wd{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}.wi{flex:0 0 66px;border:1px solid #ddd;background:#fff;padding:3px;border-radius:6px}.wi.on{border-color:#111;border-width:2px}.wi img{width:100%;height:60px;object-fit:contain;display:block}
+#acts{display:flex;gap:8px;margin-top:6px}#acts button{flex:1;min-height:42px;border:1px solid #111;font-size:12px;border-radius:21px}#acts .pri{background:#111;color:#fff}
+#sheet.fold #tabs,#sheet.fold #wd{display:none}
+#toast{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);background:#111;color:#fff;padding:8px 16px;border-radius:16px;z-index:8;display:none;font-size:13px}
+</style></head><body>
+<div id="stage"><video id="v" playsinline muted autoplay></video><canvas id="c"></canvas>
+<div id="top"><a class="pill" href="index.html#fit">← Kembali</a><span class="pill" id="price">Pilih item</span><span><button class="pill" id="shoeflip" title="Balik arah sepatu">⇄ Sepatu</button> <button class="pill" id="flip">⟲ Kamera</button></span></div>
+<div id="hint"></div><div id="toast"></div>
+<div id="sheet"><button class="pill" id="fold" style="position:absolute;right:12px;top:-36px">▾ Menu</button><div id="tabs"></div><div id="wd"></div><div id="acts"><button id="snap">📷 Foto</button><button id="clear">Lepas semua</button><button class="pri" id="bag">Add look to bag</button></div></div>
+<div id="start"><h1>TRY YOUR FIT</h1><p>Berdiri 1,5–2 meter dari kamera sampai seluruh badan terlihat, di tempat yang terang. Video tidak diunggah ke mana pun, semuanya diproses di HP Anda.</p><button id="go">Mulai kamera</button><div id="msg"></div></div></div>
+<script src="products.js?v=4" onerror="window.__e1=1"></script>
+<script src="cutouts.js?v=1" onerror="window.__e2=1"></script>
+<script src="slots.js?v=1" onerror="window.__e3=1"></script>
+<script type="module">
+const $=s=>document.querySelector(s),MP="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14",
+MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+const DATA=typeof REAL_PRODUCTS!=="undefined"?REAL_PRODUCTS:[],CUT=typeof CUTOUTS!=="undefined"?CUTOUTS:{},SL=typeof SLOTS!=="undefined"?SLOTS:{};
+const TABS=[["top","Atasan"],["bottom","Bawahan"],["head","Topi"],["shoes","Sepatu"]],pool={head:[],top:[],bottom:[],shoes:[]};
+DATA.forEach(p=>{const k=SL[p.id];if(k&&pool[k]&&p.price!=null&&CUT[p.id])pool[k].push(p)});
+const sel={},imgs={},rp=n=>"Rp "+n.toLocaleString("id-ID"),cur=p=>p.salePrice??p.price,byId=id=>DATA.find(p=>p.id==id);
+let tab="top",q="",facing="user",shoeFlip=false,stream,lmk,running=false,last=-1,sm=null,P=null;
+function toast(t){const e=$("#toast");e.textContent=t;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",1800)}
+function load(id){if(!imgs[id]){const i=new Image();i.src=CUT[id];imgs[id]=i}return imgs[id]}
+function tabsUI(){$("#tabs").innerHTML=TABS.map(([k,l])=>`<button class="${tab==k?"on":""}" data-k="${k}">${l}</button>`).join("")+`<input placeholder="Cari…" value="${q}" aria-label="Cari">`;
+ $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{tab=b.dataset.k;q="";tabsUI();strip()});$("#tabs input").oninput=e=>{q=e.target.value;strip()}}
+function strip(){const f=q.toLowerCase();$("#wd").innerHTML=pool[tab].filter(p=>!f||p.name.toLowerCase().includes(f)).slice(0,120).map(p=>`<button class="wi ${sel[tab]==p.id?"on":""}" data-id="${p.id}" title="${p.name.replace(/"/g,"")}"><img loading="lazy" src="${CUT[p.id]}" alt=""></button>`).join("")||"<span style='font-size:12px;color:#888'>Tidak ada item.</span>";
+ $("#wd").querySelectorAll(".wi").forEach(b=>b.onclick=()=>{const id=b.dataset.id;sel[tab]=sel[tab]==id?null:id;if(sel[tab])load(id);strip();price()})}
+function price(){const it=Object.values(sel).filter(Boolean).map(byId),s=it.reduce((a,p)=>a+cur(p),0);$("#price").textContent=it.length?rp(it.length>1?Math.round(s*.9):s)+(it.length>1?" (−10%)":""):"Pilih item"}
+/* ===== Penempatan baju mengikuti titik tubuh (koordinat layar) ===== */
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function placements(Q,sel,img,flipShoe,find){const out=[],ok=(i,t=.5)=>Q[i]&&Q[i].vis>=t,mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2}),ratio=id=>img(id).naturalHeight/img(id).naturalWidth||1;
+ const ang=(a,b)=>{const[l,r]=a.x<b.x?[a,b]:[b,a];return Math.atan2(r.y-l.y,r.x-l.x)};
+ const hipsOk=ok(23)&&ok(24),shOk=ok(11)&&ok(12),hd=hipsOk?dist(Q[23],Q[24]):0,sw=shOk?dist(Q[11],Q[12]):0,ref=hd||sw*.7;
+ if(sel.bottom&&hipsOk){const id=sel.bottom,hc=mid(Q[23],Q[24]),r=ratio(id),short=/SHORT|SKIRT/i.test(find(id).name);
+  const e=short?(ok(25,.4)&&ok(26,.4)?mid(Q[25],Q[26]):null):(ok(27,.35)&&ok(28,.35)?mid(Q[27],Q[28]):null);let w,h;
+  if(e){h=dist(hc,e)*(short?1.1:1.12);w=h/r;const mn=hd*1.7,mx=hd*3.2;if(w>mx){w=mx;h=w*r}else if(w<mn){w=mn;h=w*r}}else{w=hd*2.3;h=w*r}
+  out.push({id,cx:hc.x,cy:hc.y-hd*.3,w,h,ang:ang(Q[23],Q[24]),ax:.5,ay:.03})}
+ if(sel.top&&shOk){const id=sel.top,sc=mid(Q[11],Q[12]),w=sw*1.9;out.push({id,cx:sc.x,cy:sc.y,w,h:w*ratio(id),ang:ang(Q[11],Q[12]),ax:.5,ay:.07})}
+ if(sel.shoes&&ref){const id=sel.shoes,r=ratio(id),w=ref*.8;[27,28].forEach((i,k)=>{if(ok(i,.35))out.push({id,cx:Q[i].x,cy:Q[i].y+w*r*.25,w,h:w*r,ang:0,ax:.5,ay:.5,flip:flipShoe})})}
+ if(sel.head&&ok(7,.4)&&ok(8,.4)){const id=sel.head,ed=dist(Q[7],Q[8]),c=mid(Q[7],Q[8]),w=ed*2.3;out.push({id,cx:c.x,cy:c.y-ed*.5,w,h:w*ratio(id),ang:ang(Q[7],Q[8]),ax:.5,ay:1})}
+ return out}
+/* ===== Kamera + deteksi ===== */
+const v=$("#v"),cv=$("#c"),ctx=cv.getContext("2d");let W=0,H=0,dpr=1;
+function resize(){dpr=Math.min(devicePixelRatio||1,2);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr}
+addEventListener("resize",resize);
+function mapPt(l){const vw=v.videoWidth,vh=v.videoHeight,s=Math.min(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2;let x=l.x*vw*s+ox;const y=l.y*vh*s+oy;if(facing=="user")x=W-x;return{x,y,vis:l.visibility??1}}
+function frame(){if(!running)return;
+ if(v.readyState>=2&&lmk&&v.currentTime!==last){last=v.currentTime;try{const r=lmk.detectForVideo(v,performance.now()),p=r.landmarks&&r.landmarks[0];
+  if(p){sm=sm&&sm.length==p.length?p.map((l,i)=>({x:sm[i].x+(l.x-sm[i].x)*.45,y:sm[i].y+(l.y-sm[i].y)*.45,visibility:l.visibility})):p.map(l=>({...l}));P=sm.map(mapPt)}else{sm=null;P=null}}catch(e){}}
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+ const any=Object.values(sel).some(Boolean);
+ if(P){const list=placements(P,sel,load,shoeFlip,byId);list.forEach(o=>{const im=load(o.id);if(!im.complete||!im.naturalWidth)return;ctx.save();ctx.translate(o.cx,o.cy);ctx.rotate(o.ang);if(o.flip)ctx.scale(-1,1);ctx.drawImage(im,-o.ax*o.w,-o.ay*o.h,o.w,o.h);ctx.restore()});
+  const needLegs=(sel.bottom||sel.shoes)&&!(P[27]&&P[27].vis>.35&&P[28]&&P[28].vis>.35);hint(!any?"Pilih baju di bawah":needLegs?"Mundur sedikit agar kaki terlihat":"")}
+ else hint("Berdiri di depan kamera sampai badan terlihat");
+ requestAnimationFrame(frame)}
+function hint(t){const h=$("#hint");h.textContent=t;h.style.display=t?"block":"none"}
+async function camera(){if(stream)stream.getTracks().forEach(t=>t.stop());
+ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1080},height:{ideal:1440}},audio:false});
+ v.srcObject=stream;await v.play();v.style.transform=facing=="user"?"scaleX(-1)":"none";resize()}
+async function model(){const{PoseLandmarker,FilesetResolver}=await import(MP+"/+esm"),fs=await FilesetResolver.forVisionTasks(MP+"/wasm");
+ const mk=d=>PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:"VIDEO",numPoses:1});
+ try{lmk=await mk("GPU")}catch(e){lmk=await mk("CPU")}}
+$("#go").onclick=async()=>{const m=$("#msg");m.textContent="";$("#go").disabled=true;$("#go").textContent="Memuat…";
+ try{if(!navigator.mediaDevices)throw new Error("Browser ini tidak mendukung kamera. Buka lewat alamat https:// di Chrome atau Safari.");
+  await camera();m.textContent="";try{await model()}catch(e){throw new Error("Gagal memuat model deteksi tubuh. Cek koneksi internet. ("+e.message+")")}
+  $("#start").style.display="none";running=true;frame()}
+ catch(e){m.textContent=(e.name=="NotAllowedError"?"Izin kamera ditolak. Aktifkan izin kamera untuk situs ini di pengaturan browser, lalu coba lagi.":e.message);$("#go").disabled=false;$("#go").textContent="Coba lagi"}};
+$("#flip").onclick=async()=>{facing=facing=="user"?"environment":"user";sm=null;try{await camera()}catch(e){toast("Kamera tidak bisa diganti")}};
+$("#fold").onclick=()=>{const s=$("#sheet");s.classList.toggle("fold");$("#fold").textContent=s.classList.contains("fold")?"▴ Menu":"▾ Menu"};
+$("#shoeflip").onclick=()=>{shoeFlip=!shoeFlip};
+$("#clear").onclick=()=>{Object.keys(sel).forEach(k=>sel[k]=null);strip();price()};
+$("#snap").onclick=()=>{const o=document.createElement("canvas");o.width=W*2;o.height=H*2;const x=o.getContext("2d");x.scale(2,2);
+ const vw=v.videoWidth,vh=v.videoHeight,s=Math.min(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2;x.save();if(facing=="user"){x.translate(W,0);x.scale(-1,1)}x.drawImage(v,ox,oy,vw*s,vh*s);x.restore();x.drawImage(cv,0,0,W,H);
+ o.toBlob(async b=>{const f=new File([b],"try-your-fit.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return}catch(e){}}const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=f.name;a.click();toast("Foto disimpan")})};
+$("#bag").onclick=()=>{const it=Object.values(sel).filter(Boolean).map(byId);if(!it.length)return toast("Pilih item dulu");let bag=[];try{bag=JSON.parse(localStorage.getItem("apex-bag")||"[]")}catch(e){}
+ const bun=it.length>1;it.forEach(p=>{const vr=p.variants[0],z=Object.keys(vr.stock).find(k=>vr.stock[k]!==0)||Object.keys(vr.stock)[0],key=vr.sku+"|"+z,ex=bag.find(b=>b.key==key),pr=bun?Math.round(cur(p)*.9):cur(p);
+  if(ex)ex.qty++;else bag.push({key,id:p.id,name:p.name,sku:vr.skus&&vr.skus[z]||vr.sku,color:vr.color,size:z,qty:1,price:pr,img:CUT[p.id]})});
+ try{localStorage.setItem("apex-bag",JSON.stringify(bag));toast("Look masuk ke tas (ukuran pertama yang tersedia)")}catch(e){toast("Tas tidak bisa disimpan")}};
+if(!Object.values(pool).every(a=>a.length)){$("#msg").textContent="Data belum lengkap: butuh products.js, slots.js, dan cutouts.js (dengan foto potongan) di folder yang sama."}
+tabsUI();strip();price();
+</script></body></html>
